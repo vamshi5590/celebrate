@@ -33,6 +33,7 @@
     .muted{font-size:13px; color:#6b5566; margin-top:10px}
     .hidden{display:none}
     .error{color:#9d174d; font-weight:600; margin-top:10px}
+    .error.show{display:block}
 
     /* 🌸 Flower emoji rain (CSS keyframes for broad compatibility) */
     .flower {
@@ -66,7 +67,8 @@
     <h2 style="margin:4px 0 12px;color:#8a2c5b">Enter your name to view your Women’s Day wish 🌸</h2>
     <input id="nameInput" placeholder="e.g., Ms Anjali ji" autocomplete="name" />
     <br/>
-    <button id="goBtn">Show wishes</button>
+    <!-- Inline fallback added: onclick calls submitName() even if listeners fail -->
+    <button id="goBtn" onclick="submitName()">Show wishes</button>
     <div class="muted">We’ll recognize common prefixes/suffixes like Ms, Dr, ji, garu.</div>
     <div class="error hidden" id="errBox">Sorry, we couldn’t find that name. Please try again.</div>
   </div>
@@ -89,7 +91,7 @@ const ALLOWED_NAMES = [
   'Dhivya','Malar'
 ];
 
-// ❗ Strict mode: set to true only if you want to allow 1-character typos
+// Strict matching (change to true only if you want to allow 1-char typos)
 const ALLOW_TYPO_TOLERANCE = false;
 
 /* ----------------------------
@@ -118,3 +120,145 @@ function canonicalTokens(name){
   return tokens;
 }
 function levenshtein(a, b){
+  const m=a.length, n=b.length;
+  if(m===0) return n; if(n===0) return m;
+  const dp = Array(n+1).fill(0);
+  for(let j=0;j<=n;j++) dp[j]=j;
+  for(let i=1;i<=m;i++){
+    let prev=dp[0]; dp[0]=i;
+    for(let j=1;j<=n;j++){
+      const tmp=dp[j];
+      const cost = a[i-1]===b[j-1] ? 0 : 1;
+      dp[j] = Math.min(dp[j]+1, dp[j-1]+1, prev+cost);
+      prev=tmp;
+    }
+  }
+  return dp[n];
+}
+
+// Build canonical list safely (filters out empty/invalid entries)
+const allowedCanon = ALLOWED_NAMES
+  .map(n => {
+    const tokens = canonicalTokens(n);
+    return { original: n, tokens, full: tokens.join(' ') };
+  })
+  .filter(a => a.tokens.length > 0);
+
+function isAllowed(inputRaw){
+  const inputTokens = canonicalTokens(inputRaw);
+  const inputFull = inputTokens.join(' ');
+  if (!inputFull) return {ok:false};
+
+  // Exact full match
+  if (allowedCanon.some(a => a.full === inputFull)) return {ok:true, matched:inputRaw};
+
+  const inputSet = new Set(inputTokens);
+
+  // Single-token allowed names: any word match
+  // Multi-token allowed names: require all tokens present (guarded)
+  for (const a of allowedCanon){
+    if (a.tokens.length === 1 && inputSet.has(a.tokens[0])) {
+      return {ok:true, matched:inputRaw};
+    }
+    if (a.tokens.length > 1) { // guard avoids empty-array every() = true
+      const allIn = a.tokens.every(t => inputSet.has(t));
+      if (allIn) return {ok:true, matched:inputRaw};
+    }
+  }
+
+  // Optional: 1-char typo tolerance for single-token allowed names
+  if (ALLOW_TYPO_TOLERANCE){
+    for (const a of allowedCanon){
+      if (a.tokens.length === 1){
+        const target = a.tokens[0];
+        for (const w of inputTokens){
+          if (levenshtein(w, target) <= 1) return {ok:true, matched:inputRaw};
+        }
+      }
+    }
+  }
+  return {ok:false};
+}
+
+/* ----------------------------
+   3) UI logic + Flower rain
+----------------------------- */
+const promptCard = document.getElementById('promptCard');
+const greetCard  = document.getElementById('greetCard');
+const nameInput  = document.getElementById('nameInput');
+const nameOut    = document.getElementById('nameOut');
+const errBox     = document.getElementById('errBox');
+const goBtn      = document.getElementById('goBtn');
+const backBtn    = document.getElementById('backBtn');
+
+function flowerRain({
+  durationMin = 6, durationMax = 10, count = Math.min(80, Math.floor(window.innerWidth / 10)),
+  emojiSet = ['🌸','🌷','💮','🌺'], runFor = 5000
+} = {}) {
+  const endAt = Date.now() + runFor;
+  function spawnOne() {
+    const el = document.createElement('span');
+    el.className = 'flower';
+    el.textContent = emojiSet[Math.floor(Math.random() * emojiSet.length)];
+    const left = Math.random() * 100;
+    const dur  = durationMin + Math.random() * (durationMax - durationMin);
+    const delay = Math.random() * 1.2;
+    const swayDur = 2.5 + Math.random() * 2.5;
+    el.style.left = `${left}vw`;
+    el.style.animationDuration = `${dur}s, ${swayDur}s`;
+    el.style.animationDelay = `${delay}s, ${delay/2}s`;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), (delay+dur)*1000 + 250);
+  }
+  for (let i=0;i<count;i++) setTimeout(spawnOne, Math.random()*1200);
+  const t = setInterval(() => {
+    if (Date.now()>endAt) { clearInterval(t); return; }
+    for (let i=0;i<4;i++) spawnOne();
+  }, 500);
+}
+
+function submitName(){
+  try {
+    errBox.classList.add('hidden');
+    const raw = nameInput.value.trim();
+    console.log('[submitName] raw input =', raw);
+
+    if (!raw){
+      errBox.textContent='Please enter your name 🙂';
+      errBox.classList.remove('hidden'); errBox.classList.add('show');
+      nameInput.focus();
+      return;
+    }
+
+    const res = isAllowed(raw);
+    console.log('[submitName] allowed =', res.ok, 'tokens =', canonicalTokens(raw));
+
+    if (res.ok){
+      nameOut.textContent = raw;                 // safe: textContent escapes HTML
+      document.title = `Happy Women’s Day, ${raw}!`;
+      promptCard.classList.add('hidden');
+      greetCard.classList.remove('hidden');
+      flowerRain();                               // celebration on success
+    } else {
+      errBox.textContent = 'Sorry, we couldn’t find that name. Try first name only (prefix/suffix okay).';
+      errBox.classList.remove('hidden'); errBox.classList.add('show');
+      nameInput.focus();
+    }
+  } catch (e) {
+    console.error('submitName error:', e);
+    alert('Unexpected error. Please refresh and try again.');
+  }
+}
+
+// JS listeners (kept) — inline onclick is also present as fallback
+goBtn.addEventListener('click', submitName);
+nameInput.addEventListener('keydown', e => { if (e.key === 'Enter') submitName(); });
+backBtn.addEventListener('click', () => {
+  greetCard.classList.add('hidden');
+  promptCard.classList.remove('hidden');
+  nameInput.focus();
+});
+nameInput.focus();
+</script>
+</body>
+</html>
