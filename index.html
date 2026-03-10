@@ -1,48 +1,120 @@
-// 1) Your cleaned list
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Women’s Day Wishes</title>
+  <style>
+    :root { --bg:#fff6fb; --primary:#b4005a; --accent:#ff5ca8; --text:#3a2a35; }
+    html,body{height:100%;margin:0}
+    body{
+      display:flex;align-items:center;justify-content:center;text-align:center;
+      background: radial-gradient(1200px 800px at 20% 10%, #ffe4f1 0, #fff6fb 45%, #ffffff 100%);
+      font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+      color:var(--text); padding:24px;
+    }
+    .card{
+      background:#ffffffcc; backdrop-filter:blur(6px); border:1px solid #ffd1e6;
+      border-radius:20px; box-shadow:0 10px 30px rgba(180,0,90,0.12);
+      max-width:680px; width:min(680px,92vw); padding:28px 28px 22px; position:relative; overflow:hidden;
+    }
+    h1{font-size:clamp(28px,5vw,44px); line-height:1.1; margin:0 0 10px; color:var(--primary)}
+    .name{background:linear-gradient(90deg,var(--primary),var(--accent)); -webkit-background-clip:text; background-clip:text; color:transparent; font-weight:800}
+    p{margin:8px 0 12px; font-size:clamp(15px,2.4vw,18px)}
+    .tag{display:inline-block; padding:8px 14px; border-radius:999px; background:#ffe7f2; color:#b4005a; font-weight:600; margin-bottom:14px}
+    input{
+      padding:12px 14px; border-radius:12px; border:1px solid #d7c1cc; width:min(420px,86vw);
+      font-size:16px; outline:none;
+    }
+    button{
+      margin-top:14px; padding:10px 16px; border:none; border-radius:12px; background:#b4005a;
+      color:white; font-weight:700; font-size:16px; cursor:pointer; box-shadow:0 6px 16px rgba(180,0,90,0.25);
+    }
+    .muted{font-size:13px; color:#6b5566; margin-top:10px}
+    .hidden{display:none}
+    .error{color:#9d174d; font-weight:600; margin-top:10px}
+
+    /* 🌸 Flower emoji rain (CSS keyframes for broad compatibility) */
+    .flower {
+      position: fixed;
+      top: -2rem;
+      font-size: 1.4rem;
+      pointer-events: none;
+      z-index: 9999;
+      filter: drop-shadow(0 2px 4px rgba(180,0,90,0.25));
+      animation-name: fall, sway;
+      animation-timing-function: linear, ease-in-out;
+      will-change: transform, opacity;
+    }
+    @keyframes fall {
+      0%   { transform: translateY(-10vh) rotate(0deg); opacity: 0; }
+      10%  { opacity: 1; }
+      100% { transform: translateY(110vh) rotate(360deg); opacity: 1; }
+    }
+    @keyframes sway {
+      0%   { transform: translateX(-20px); }
+      50%  { transform: translateX(20px); }
+      100% { transform: translateX(-20px); }
+    }
+    @media (prefers-reduced-motion: reduce) { .flower { animation: none !important; } }
+  </style>
+</head>
+<body>
+
+  <!-- Name Prompt -->
+  <div class="card" id="promptCard">
+    <h2 style="margin:4px 0 12px;color:#8a2c5b">Enter your name to view your Women’s Day wish 🌸</h2>
+    <input id="nameInput" placeholder="e.g., Ms Anjali ji" autocomplete="name" />
+    <br/>
+    <button id="goBtn">Show wishes</button>
+    <div class="muted">We’ll recognize common prefixes/suffixes like Ms, Dr, ji, garu.</div>
+    <div class="error hidden" id="errBox">Sorry, we couldn’t find that name. Please try again.</div>
+  </div>
+
+  <!-- Greeting -->
+  <div class="card hidden" id="greetCard">
+    <div class="tag">Happy International Women’s Day 🌸</div>
+    <h1>Happy Women’s Day <span class="name" id="nameOut"></span>!</h1>
+    <p>Wishing you strength, joy, and success—today and every day. Thanks for inspiring the team! ✨</p>
+    <button id="backBtn" style="background:#8a2c5b">Back</button>
+  </div>
+
+<script>
+/* ----------------------------
+   1) Configure allowed names
+----------------------------- */
 const ALLOWED_NAMES = [
   'Anjali','Sneha','Priya','Mamatha','Shalini',
-  'Vandana','Shriya','Riddhi','Athira','Lavanya','Dhivya','Malar'
+  'Vandana','Shriya','Riddhi','Athira','Lavanya',
+  'Dhivya','Malar'
 ];
 
-// 2) Build canonical list safely (filters out empties)
-const allowedCanon = ALLOWED_NAMES
-  .map(n => {
-    const tokens = canonicalTokens(n);
-    return { original: n, tokens, full: tokens.join(' ') };
-  })
-  .filter(a => a.tokens.length > 0);
+// ❗ Strict mode: set to true only if you want to allow 1-character typos
+const ALLOW_TYPO_TOLERANCE = false;
 
-// 3) Matching loop with guard
-function isAllowed(inputRaw){
-  const inputTokens = canonicalTokens(inputRaw);
-  const inputFull = inputTokens.join(' ');
-  if (!inputFull) return {ok:false};
-
-  // Exact full match
-  if (allowedCanon.some(a => a.full === inputFull)) return {ok:true, matched:inputRaw};
-
-  const inputSet = new Set(inputTokens);
-
-  for (const a of allowedCanon){
-    if (a.tokens.length === 1 && inputSet.has(a.tokens[0])) {
-      return {ok:true, matched:inputRaw};
-    }
-    if (a.tokens.length > 1) {  // ← guard to avoid empty-array 'every' = true
-      const allIn = a.tokens.every(t => inputSet.has(t));
-      if (allIn) return {ok:true, matched:inputRaw};
-    }
-  }
-
-  // Optional 1-char typo tolerance (single-token allowed names only)
-  if (ALLOW_TYPO_TOLERANCE){
-    for (const a of allowedCanon){
-      if (a.tokens.length === 1){
-        const target = a.tokens[0];
-        for (const w of inputTokens){
-          if (levenshtein(w, target) <= 1) return {ok:true, matched:inputRaw};
-        }
-      }
-    }
-  }
-  return {ok:false};
+/* ----------------------------
+   2) Name matching helpers
+----------------------------- */
+function normalize(str) {
+  return str
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '') // remove diacritics
+    .toLowerCase()
+    .replace(/[^a-z0-9\s]/g, ' ') // drop punctuation
+    .replace(/\s+/g, ' ')
+    .trim();
 }
+const PREFIXES = new Set(['mr','mr.','ms','ms.','mrs','mrs.','miss','dr','dr.','smt','smt.','kum','kum.','kumari','shri','shri.','sri','sri.','prof','prof.','sir','madam','maam',"ma'am",'er','er.']);
+const SUFFIXES = new Set(['ji','garu']);
+
+function stripHonorificsTokens(tokens){
+  while(tokens.length && PREFIXES.has(tokens[0])) tokens.shift();
+  while(tokens.length && SUFFIXES.has(tokens[tokens.length-1])) tokens.pop();
+  return tokens;
+}
+function canonicalTokens(name){
+  const norm = normalize(name);
+  let tokens = norm.split(' ').filter(Boolean);
+  tokens = stripHonorificsTokens(tokens);
+  return tokens;
+}
+function levenshtein(a, b){
